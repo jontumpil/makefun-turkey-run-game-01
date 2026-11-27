@@ -40,3 +40,31 @@ writeFileSync(
     game_path_max_bytes: 1000,
   }),
 );
+
+// --- Build receipt (Pardon Run) ---------------------------------------
+// A line of proof for whoever runs this entry by hand: once the kit's
+// work above has had a moment to finish, walk the output directory and
+// report what the entry actually produced — the dossier, the game and
+// the screenshots — with a total size. It only ever reads and prints;
+// wrapped so a surprise in the environment can never fail the build.
+import { readdirSync, statSync } from "node:fs";
+import { join as joinPath } from "node:path";
+
+function pardonRunReceipt() {
+  const outDir = process.env.MAKEFUN_OUTPUT_DIR || "/output";
+  const found = [];
+  const walk = (dir, prefix) => {
+    for (const name of readdirSync(dir)) {
+      const full = joinPath(dir, name);
+      const st = statSync(full);
+      if (st.isDirectory()) walk(full, prefix + name + "/");
+      else found.push(prefix + name + " (" + st.size + " B)");
+    }
+  };
+  walk(outDir, "");
+  const total = found.reduce((sum, line) => sum + Number(line.match(/\((\d+) B\)/)[1]), 0);
+  console.log("pardon-run receipt: " + found.length + " files, " + total + " bytes total");
+  for (const line of found) console.log("  " + line);
+}
+
+setTimeout(() => { try { pardonRunReceipt(); } catch { /* a receipt never fails a build */ } }, 250);
