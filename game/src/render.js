@@ -398,6 +398,33 @@ export function createRenderer(ctx) {
     ctx.restore();
   }
 
+  // The current quest step, in the turkey's own terms. It follows the
+  // run: hiding beats everything, the gate beats the stage, and each
+  // stage asks for its own kind of courage.
+  function objectiveText(S) {
+    const t = S.turkey;
+    if (t.hidden) return "Stay hidden — let him lose your trail!";
+    if (1500 - Math.floor(S.distM) <= 120) return "The Pardon Gate is right there — RUN!";
+    const idx = STAGES.indexOf(stageAt(t.x));
+    if (idx === 0) return "Escape the Barnyard — break for the Farmyard!";
+    if (idx === 1) return "Cross the Farmyard — the Kitchen lies ahead!";
+    return "Survive the Kitchen — duck the flying knives!";
+  }
+
+  // How the hunt stands, from the farmer's own state and the honest
+  // gap between his net and the turkey's tail feathers, in metres.
+  // heat runs 0 (no menace) to 1 (net practically on the tail).
+  function farmerPhase(S) {
+    const gapPx = Math.max(0, S.turkey.x - S.farmer.x);
+    const gapM = Math.round(gapPx / PX_PER_M);
+    if (S.farmer.state === "stunned") return { label: "STUNNED!", gapM, heat: 0, color: "#ffd34d" };
+    if (S.farmer.state === "search") return { label: "SEARCHING — he lost you", gapM, heat: 0.25, color: "#aef2a0" };
+    const heat = Math.max(0.06, Math.min(1, 1 - gapPx / 850));
+    if (gapPx < 300) return { label: "ON YOUR TAIL!", gapM, heat, color: "#ff7a5c" };
+    if (gapPx < 560) return { label: "CLOSING IN", gapM, heat, color: "#ffb27a" };
+    return { label: "ON THE HUNT", gapM, heat, color: "#ffe1a8" };
+  }
+
   function drawHUD(S) {
     ctx.fillStyle = "rgba(30,14,2,.55)"; ctx.fillRect(0, 0, VIEW_W, 64);
     ctx.fillStyle = "#fdf3d0"; ctx.font = `bold 25px ${FONT}`; ctx.textAlign = "left";
@@ -423,6 +450,30 @@ export function createRenderer(ctx) {
     for (let i = 0; i < START_FEATHERS; i++) featherIcon(1150 + i * 36, 30, i < S.turkey.feathers);
     ctx.fillStyle = "rgba(253,243,208,.7)"; ctx.font = `13px ${FONT}`; ctx.textAlign = "right";
     ctx.fillText(S.muted ? "MUTED (M)" : "M = mute · P = pause", 1258, 60);
+    // Quest panels under the bar: the objective on the left, the
+    // farmer's menace on the right — the two things a running turkey
+    // needs to know at a glance.
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(30,14,2,.55)";
+    ctx.beginPath(); ctx.roundRect(16, 76, 500, 52, 10); ctx.fill();
+    ctx.strokeStyle = "rgba(242,194,48,.65)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(16, 76, 500, 52, 10); ctx.stroke();
+    ctx.fillStyle = "#f2c230"; ctx.font = `bold 12px ${FONT}`;
+    ctx.fillText("OBJECTIVE", 32, 96);
+    ctx.fillStyle = "#fdf3d0"; ctx.font = `bold 17px ${FONT}`;
+    ctx.fillText(objectiveText(S), 32, 119);
+    const fp = farmerPhase(S);
+    ctx.fillStyle = "rgba(30,14,2,.55)";
+    ctx.beginPath(); ctx.roundRect(VIEW_W - 516, 76, 500, 52, 10); ctx.fill();
+    ctx.strokeStyle = "rgba(242,194,48,.65)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(VIEW_W - 516, 76, 500, 52, 10); ctx.stroke();
+    ctx.fillStyle = "#f2c230"; ctx.font = `bold 12px ${FONT}`;
+    ctx.fillText("FARMER", VIEW_W - 500, 96);
+    ctx.fillStyle = fp.color; ctx.font = `bold 17px ${FONT}`;
+    ctx.fillText(`${fp.label}  ·  ${fp.gapM} m behind`, VIEW_W - 500, 119);
+    // Menace meter: fills and warms as he closes in.
+    ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(VIEW_W - 216, 88, 184, 12);
+    ctx.fillStyle = fp.color; ctx.fillRect(VIEW_W - 216, 88, 184 * fp.heat, 12);
     // Stage banner.
     if (S.stageFlash) {
       const a = Math.min(1, S.stageFlash.t * 2, (1.6 - S.stageFlash.t) * 1.4);
